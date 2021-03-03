@@ -4,41 +4,50 @@ import requests
 import json
 
 
+class Linkedin(object):
+    def __init__(self, post_id, username_list, access_token):
+        self.access_token = access_token
+        self.baseurl = "https://api.linkedin.com/v2"
+        self.post_id = post_id
+        self.username_list = username_list
+        self.reacted = []
+        self.not_reacted = []
+
+        self.headers = {
+            "Authorization": "Bearer {}".format(self.access_token),
+            "X-Restli-Protocol-Version": "2.0.0"
+        }
+
+    def __get_reactions_post(self):
+        url = "/reactions/(entity:urn%3Ali%3Aactivity%3A{})?q=entity&count=1000&projection=(elements)".format(self.post_id)
+        response = requests.get(self.baseurl+url, headers=self.headers)
+        json_text = json.loads(response.text)
+        elements = json_text["elements"]
+
+        for element in elements:
+            actor = element["created"]["actor"]
+            actor_elements = actor.split(':')
+            actor_id = actor_elements[-1]
+
+            url = "/people/(id:{})".format(actor_id)
+            response = requests.get(self.baseurl+url, headers=self.headers)
+            json_text = json.loads(response.text)
+            if json_text["id"] != "private":
+                self.reacted.append(json_text["vanityName"])
+
+    def check_not_reacted(self):
+        self.__get_reactions_post()
+
+        for username in username_list:
+            if username not in self.reacted:
+                self.not_reacted.append(username)
+
+        return self.not_reacted
+ 
 load_dotenv('.env')
-ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
+access_token = os.getenv("ACCESS_TOKEN")
+post_id = "" #postid is the longest digit sequence of the linkedin post found along the URL
+username_list = [] #enter the usernames as strings to check if that user has liked the post
 
-url = "https://api.linkedin.com/v2/organizationAcls?q=organization&organization=urn%3Ali%3Aorganization%3A14547467&role=ADMINISTRATOR&state=APPROVED"
-
-admin_request_url = "https://api.linkedin.com/v2/reactions/(entity:urn%3Ali%3Aactivity%3A6750434325692596224)?q=entity&count=67&projection=(elements)"
-headers={
-    "Connection": "Keep-Alive",
-    "Authorization": "Bearer {}".format(ACCESS_TOKEN),
-    "Content-Type":"application/json",
-}
-
-
-headers_admin={
-    "Authorization": "Bearer {}".format(ACCESS_TOKEN),
-    "X-Restli-Protocol-Version": "2.0.0"
-}
-re = requests.get(url, headers=headers)
-print(re.status_code)
-print(re.json())
-
-re = requests.get(admin_request_url, headers=headers_admin)
-print(re.status_code)
-json_text = json.loads(re.text)
-#print(json_text)
-elements = json_text["elements"]
-
-for element in elements:
-    actor = element["created"]["actor"]
-    actor_elements = actor.split(':')
-    actor_id = actor_elements[-1]
-
-    url = "https://api.linkedin.com/v2/people/(id:{})".format(actor_id)
-    print(url)
-    re = requests.get(url, headers=headers_admin)
-    print(re.status_code)
-    print(re.text)
-
+checker = Linkedin(post_id, username_list, access_token)
+print(checker.check_not_reacted())
